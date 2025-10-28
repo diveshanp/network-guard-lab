@@ -5,23 +5,27 @@ export type DeviceType = "pc" | "server" | "router";
 
 interface NetworkDeviceProps {
   id: string;
+  name: string;
   type: DeviceType;
   position: { x: number; y: number };
   isSelected: boolean;
   health: number;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
+  onRepair: (id: string) => void;
   onDrag: (id: string, position: { x: number; y: number }) => void;
 }
 
 export const NetworkDevice = ({
   id,
+  name,
   type,
   position,
   isSelected,
   health,
   onSelect,
   onRemove,
+  onRepair,
   onDrag,
 }: NetworkDeviceProps) => {
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -87,13 +91,17 @@ export const NetworkDevice = ({
             e.stopPropagation();
             onRemove(id);
           }}
-          className="absolute -top-2 -right-2 p-1 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/80 transition-colors"
+          className="absolute -top-2 -right-2 p-1 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/80 transition-colors z-10"
         >
           <X className="w-3 h-3" />
         </button>
         
         <div className={cn("mb-2", getHealthColor())}>
           {getIcon()}
+        </div>
+        
+        <div className="text-xs font-mono text-foreground font-semibold">
+          {name}
         </div>
         
         <div className="text-xs font-mono text-muted-foreground uppercase">
@@ -115,6 +123,18 @@ export const NetworkDevice = ({
         <div className={cn("text-xs font-mono mt-1", getHealthColor())}>
           {health}%
         </div>
+        
+        {health < 100 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRepair(id);
+            }}
+            className="mt-2 w-full text-xs font-mono px-2 py-1 rounded bg-cyber-green/20 text-cyber-green hover:bg-cyber-green/30 transition-colors border border-cyber-green/50"
+          >
+            REPAIR
+          </button>
+        )}
       </div>
     </div>
   );

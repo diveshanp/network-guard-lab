@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { NetworkDevice, DeviceType } from "@/components/NetworkDevice";
 import { ConnectionLine } from "@/components/ConnectionLine";
 import { SecurityControls } from "@/components/SecurityControls";
@@ -6,10 +6,12 @@ import { SystemHealth } from "@/components/SystemHealth";
 import { AttackPanel, AttackType } from "@/components/AttackPanel";
 import { DevicePalette } from "@/components/DevicePalette";
 import { ConnectionBuilder } from "@/components/ConnectionBuilder";
+import { SystemLogs, LogEntry } from "@/components/SystemLogs";
 import { toast } from "sonner";
 
 interface Device {
   id: string;
+  name: string;
   type: DeviceType;
   position: { x: number; y: number };
   health: number;
@@ -22,7 +24,7 @@ interface Connection {
 
 const Index = () => {
   const [devices, setDevices] = useState<Device[]>([
-    { id: "router-1", type: "router", position: { x: 400, y: 200 }, health: 100 },
+    { id: "router-1", name: "ROUTER-01", type: "router", position: { x: 400, y: 200 }, health: 100 },
   ]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
@@ -31,23 +33,58 @@ const Index = () => {
   const [encryption, setEncryption] = useState(false);
   const [activeAttacks, setActiveAttacks] = useState<Set<string>>(new Set());
   const [blockedAttacks, setBlockedAttacks] = useState(0);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [deviceCounters, setDeviceCounters] = useState({ pc: 0, server: 0, router: 1 });
+
+  const addLog = (message: string, type: LogEntry["type"] = "info") => {
+    const timestamp = new Date().toLocaleTimeString();
+    const newLog: LogEntry = {
+      id: `log-${Date.now()}`,
+      timestamp,
+      message,
+      type,
+    };
+    setLogs((prev) => [...prev, newLog]);
+  };
 
   const addDevice = (type: DeviceType) => {
-    const newDevice: Device = {
-      id: `${type}-${Date.now()}`,
-      type,
-      position: { x: Math.random() * 600 + 100, y: Math.random() * 300 + 100 },
-      health: 100,
-    };
-    setDevices([...devices, newDevice]);
-    toast.success(`${type.toUpperCase()} added to network`);
+    setDeviceCounters((prev) => {
+      const newCounter = prev[type] + 1;
+      const deviceName = `${type.toUpperCase()}-${String(newCounter).padStart(2, "0")}`;
+      
+      const newDevice: Device = {
+        id: `${type}-${Date.now()}`,
+        name: deviceName,
+        type,
+        position: { x: Math.random() * 600 + 100, y: Math.random() * 300 + 100 },
+        health: 100,
+      };
+      setDevices([...devices, newDevice]);
+      toast.success(`${deviceName} added to network`);
+      addLog(`${deviceName} added to network`, "success");
+      
+      return { ...prev, [type]: newCounter };
+    });
   };
 
   const removeDevice = (id: string) => {
+    const device = devices.find((d) => d.id === id);
     setDevices(devices.filter((d) => d.id !== id));
     setConnections(connections.filter((c) => c.from !== id && c.to !== id));
     if (selectedDevice === id) setSelectedDevice(null);
     toast.info("Device removed from network");
+    if (device) {
+      addLog(`${device.name} removed from network`, "warning");
+    }
+  };
+
+  const repairDevice = (id: string) => {
+    const device = devices.find((d) => d.id === id);
+    setDevices(devices.map((d) => (d.id === id ? { ...d, health: 100 } : d)));
+    toast.success("Device repaired");
+    if (device) {
+      addLog(`${device.name} repaired to 100% health`, "success");
+    }
   };
 
   const updateDevicePosition = (id: string, position: { x: number; y: number }) => {
@@ -59,8 +96,13 @@ const Index = () => {
       (c) => (c.from === fromId && c.to === toId) || (c.from === toId && c.to === fromId)
     );
     if (!exists) {
+      const fromDevice = devices.find((d) => d.id === fromId);
+      const toDevice = devices.find((d) => d.id === toId);
       setConnections([...connections, { from: fromId, to: toId }]);
       toast.success("Connection established");
+      if (fromDevice && toDevice) {
+        addLog(`Connection established: ${fromDevice.name} <-> ${toDevice.name}`, "success");
+      }
     } else {
       toast.error("Connection already exists");
     }
@@ -70,6 +112,7 @@ const Index = () => {
     const targetDevices = devices.filter((d) => d.health > 0);
     if (targetDevices.length === 0) {
       toast.error("No devices to attack");
+      addLog("Attack failed: No devices available", "error");
       return;
     }
 
@@ -82,8 +125,9 @@ const Index = () => {
     if (isBlocked) {
       setBlockedAttacks((prev) => prev + 1);
       toast.success(`${type.toUpperCase()} attack blocked by security systems!`, {
-        description: `Target: ${target.type.toUpperCase()}`,
+        description: `Target: ${target.name}`,
       });
+      addLog(`${type.toUpperCase()} attack blocked targeting ${target.name}`, "success");
       return;
     }
 
@@ -98,8 +142,9 @@ const Index = () => {
     );
 
     toast.error(`${type.toUpperCase()} attack in progress!`, {
-      description: `Target: ${target.type.toUpperCase()} - Damage: ${damage.toFixed(0)}%`,
+      description: `Target: ${target.name} - Damage: ${damage.toFixed(0)}%`,
     });
+    addLog(`${type.toUpperCase()} attack on ${target.name} - Damage: ${damage.toFixed(0)}%`, "error");
 
     setTimeout(() => {
       setActiveAttacks((prev) => {
@@ -151,12 +196,14 @@ const Index = () => {
                 <NetworkDevice
                   key={device.id}
                   id={device.id}
+                  name={device.name}
                   type={device.type}
                   position={device.position}
                   health={device.health}
                   isSelected={selectedDevice === device.id}
                   onSelect={setSelectedDevice}
                   onRemove={removeDevice}
+                  onRepair={repairDevice}
                   onDrag={updateDevicePosition}
                 />
               ))}
@@ -193,6 +240,8 @@ const Index = () => {
             />
             
             <DevicePalette onAddDevice={addDevice} />
+            
+            <SystemLogs logs={logs} />
           </div>
         </div>
       </div>
